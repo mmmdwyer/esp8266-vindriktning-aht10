@@ -1,5 +1,5 @@
 #include <ArduinoJson.h>
-#include <ArduinoOTA.h>
+#include <Adafruit_AHT10.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
@@ -9,8 +9,11 @@
 #include "Config.h"
 #include "SerialCom.h"
 #include "Types.h"
+#include "i2ccom.h"
 
-particleSensorState_t state;
+genericSensorState_t airquality;
+floatSensorState_t temperature;
+floatSensorState_t humidity;
 
 uint8_t mqttRetryCounter = 0;
 
@@ -48,6 +51,7 @@ void saveConfigCallback() {
 void setup() {
     Serial.begin(115200);
     SerialCom::setup();
+    i2ccom::setup();
 
     Serial.println("\n");
     Serial.println("Hello from esp8266-vindriktning-particle-sensor");
@@ -57,9 +61,11 @@ void setup() {
     Serial.printf("CPU Frequency: %u MHz\n", ESP.getCpuFreqMHz());
     Serial.printf("Reset reason: %s\n", ESP.getResetReason().c_str());
 
-    delay(3000);
+    delay(3000); // Why?
 
     snprintf(identifier, sizeof(identifier), "VINDRIKTNING-%X", ESP.getChipId());
+    Serial.printf("WiFi AP: %s\n", identifier);
+
     snprintf(MQTT_TOPIC_AVAILABILITY, 127, "%s/%s/status", FIRMWARE_PREFIX, identifier);
     snprintf(MQTT_TOPIC_STATE, 127, "%s/%s/state", FIRMWARE_PREFIX, identifier);
     snprintf(MQTT_TOPIC_COMMAND, 127, "%s/%s/command", FIRMWARE_PREFIX, identifier);
@@ -71,8 +77,10 @@ void setup() {
 
     Config::load();
 
+    
+    Serial.printf("Starting Wifi");
     setupWifi();
-    setupOTA();
+    Serial.printf("Starting MQTT");
     mqttClient.setServer(Config::mqtt_server, 1883);
     mqttClient.setKeepAlive(10);
     mqttClient.setBufferSize(2048);
@@ -85,50 +93,19 @@ void setup() {
     Serial.printf("PIN_UART_RX: %d\n", SerialCom::PIN_UART_RX);
 
     mqttReconnect();
-}
-
-void setupOTA() {
-    ArduinoOTA.onStart([]() { Serial.println("Start"); });
-    ArduinoOTA.onEnd([]() { Serial.println("\nEnd"); });
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-    });
-    ArduinoOTA.onError([](ota_error_t error) {
-        Serial.printf("Error[%u]: ", error);
-        if (error == OTA_AUTH_ERROR) {
-            Serial.println("Auth Failed");
-        } else if (error == OTA_BEGIN_ERROR) {
-            Serial.println("Begin Failed");
-        } else if (error == OTA_CONNECT_ERROR) {
-            Serial.println("Connect Failed");
-        } else if (error == OTA_RECEIVE_ERROR) {
-            Serial.println("Receive Failed");
-        } else if (error == OTA_END_ERROR) {
-            Serial.println("End Failed");
-        }
-    });
-
-    ArduinoOTA.setHostname(identifier);
-
-    // This is less of a security measure and more a accidential flash prevention
-    ArduinoOTA.setPassword(identifier);
-    ArduinoOTA.begin();
+    Serial.println("Setup done. Entering loop.");
 }
 
 void loop() {
-    ArduinoOTA.handle();
-    SerialCom::handleUart(state);
+    SerialCom::handleUart(airquality);
+    i2ccom::handlei2c(temperature,humidity);
     mqttClient.loop();
 
     const uint32_t currentMillis = millis();
     if (currentMillis - statusPublishPreviousMillis >= statusPublishInterval) {
         statusPublishPreviousMillis = currentMillis;
-
-        if (state.valid) {
-            printf("Publish state\n");
-            publishState();
+          publishState();
         }
-    }
 
     if (!mqttClient.connected() && currentMillis - lastMqttConnectionAttempt >= mqttConnectionInterval) {
         lastMqttConnectionAttempt = currentMillis;
@@ -189,15 +166,17 @@ bool isMqttConnected() {
 
 void publishState() {
     DynamicJsonDocument wifiJson(192);
-    DynamicJsonDocument stateJson(604);
+    DynamicJsonDocument stateJson(1204);
     char payload[256];
 
     wifiJson["ssid"] = WiFi.SSID();
     wifiJson["ip"] = WiFi.localIP().toString();
     wifiJson["rssi"] = WiFi.RSSI();
 
-    stateJson["pm25"] = state.avgPM25;
-
+    if (airquality.valid)  { stateJson["pm25"]        = airquality.average; }  else { stateJson["pm25"]="";};
+    if (temperature.valid) { stateJson["temperature"] = temperature.average; } else { stateJson["temperature"]="";};
+    if (humidity.valid)    { stateJson["humidity"]    = humidity.average; }    else { stateJson["humidity"]="";};
+    
     stateJson["wifi"] = wifiJson.as<JsonObject>();
 
     serializeJson(stateJson, payload);

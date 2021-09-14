@@ -5,7 +5,7 @@
 #include "Types.h"
 
 namespace SerialCom {
-    constexpr static const uint8_t PIN_UART_RX = 4; // D2 on Wemos D1 Mini
+    constexpr static const uint8_t PIN_UART_RX = 0; // D2 on Wemos D1 Mini
     constexpr static const uint8_t PIN_UART_TX = 13; // UNUSED
 
     SoftwareSerial sensorSerial(PIN_UART_RX, PIN_UART_TX);
@@ -23,7 +23,7 @@ namespace SerialCom {
         rxBufIdx = 0;
     }
 
-    void parseState(particleSensorState_t& state) {
+    void parseState(genericSensorState_t& airquality) {
         /**
          *         MSB  DF 3     DF 4  LSB
          * uint16_t = xxxxxxxx xxxxxxxx
@@ -32,21 +32,21 @@ namespace SerialCom {
 
         Serial.printf("Received PM 2.5 reading: %d\n", pm25);
 
-        state.measurements[state.measurementIdx] = pm25;
+        airquality.measurements[airquality.measurementIdx] = pm25;
 
-        state.measurementIdx = (state.measurementIdx + 1) % 5;
+        airquality.measurementIdx = (airquality.measurementIdx + 1) % 5;
 
-        if (state.measurementIdx == 0) {
+        if (airquality.measurementIdx == 0) {
             float avgPM25 = 0.0f;
 
             for (uint8_t i = 0; i < 5; ++i) {
-                avgPM25 += state.measurements[i] / 5.0f;
+                avgPM25 += airquality.measurements[i] / 5.0f;
             }
 
-            state.avgPM25 = avgPM25;
-            state.valid = true;
+            airquality.average = avgPM25;
+            airquality.valid = true;
 
-            Serial.printf("New Avg PM25: %d\n", state.avgPM25);
+            Serial.printf("New Avg PM25: %d\n", airquality.average);
         }
 
         clearRxBuf();
@@ -76,7 +76,7 @@ namespace SerialCom {
         return checksum == 0;
     }
 
-    void handleUart(particleSensorState_t& state) {
+    void handleUart(genericSensorState_t& state) {
         if (!sensorSerial.available()) {
             return;
         }
@@ -99,13 +99,13 @@ namespace SerialCom {
             parseState(state);
 
             Serial.printf(
-                "Current measurements: %d, %d, %d, %d, %d\n",
-
+                "Current pm25: %d, %d, %d, %d, %d, (%d)\n",
                 state.measurements[0],
                 state.measurements[1],
                 state.measurements[2],
                 state.measurements[3],
-                state.measurements[4]
+                state.measurements[4],
+                state.average
             );
         } else {
             clearRxBuf();

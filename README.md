@@ -1,47 +1,37 @@
 <p align="center"><h2>MQTT connectivity for the Ikea VINDRIKTNING</h2></p>
 
+See also the original project at [https://github.com/Hypfer/esp8266-vindriktning-particle-sensor](https://github.com/Hypfer/esp8266-vindriktning-particle-sensor).
 
-This repository contains an ESP8266 firmware, which adds MQTT to the Ikea VINDRIKTNING PM2.5 air quality sensor.
-The modification  doesn't interfere with normal operation of the device in any way.
-The ESP8266 just adds another data sink beside the colored LEDs.
+This repository contains an ESP8266 firmware, which adds MQTT to the Ikea VINDRIKTNING PM2.5 air quality sensor.  The modification  doesn't interfere with normal operation of the device in any way.  The ESP8266 just adds another data sink beside the colored LEDs. This modification adds and AHT10 i2c temperature and humidity sensor.
 
-![half_assembled](./img/half-assembled.jpg)
-
-Home Assistant Autodiscovery is supported.
-Furthermore, the WifiManager library is used for on-the-fly configuration.
-Also, ArduinoOTA is used, so that firmware updates are possible even with a reassembled device.
-
-As the ESP8266 is 5V-tolerant, this should there shouldn't be any issues, however I haven't had time to test this for longer periods of time.
-Therefore, if the ESP burns out after a while, just add a voltage divider or something.
+The Home Assistant Autodiscovery stuff hasn't been modified, because I can't test it, so it is very likely wrong at the moment.
 
 ## Prerequisites
 
 To extend your air quality sensor, you will need
 
 - An ESP8266 with a 5v voltage regulator (e.g. a Wemos D1 Mini)
-- Some short dupont cables
+ - The D1 Mini fits inside the box. Larger devices, Feather and NodeMCU are a BIT too big.
+- An AHT10 Temperature/Humidity sensor module (with all the i2c resistors already on board)
+- Some short solid wires
+- Some short stranded wires
 - A soldering iron
 - A long PH0 Screwdriver (e.g. Wera 118022)
 
-Fortunately, there is a lot of unused space in the enclosure, which is perfect for our ESP8266.
-Also, everything we need is accessible via easy to solder testpoints.
-
-## Hardware
-
-To install the ESP8266, you need to unscrew the four visible screws in the back of the enclosure.
-
-Then, there are also three screws holding the tiny PCB in place. These aren't necessary to remove since you can solder
-in-place, however personally, I'd recommend taking the board out of there since it will be easier to solder without fear
-of accidentally melting some plastic.
-
-![board](./img/board.jpg)
-
-As you can see in this image, you'll need to solder wires to GND, 5V and the Testpoint that is connected to TX of the
-Particle Sensor.
-
-Then just connect these Wires to GND, VIN (5V) and D2 (if you're using a Wemos D1 Mini).
-
-Done.
+Directions
+- Use about 15mm of solid wire to wire the AHT10 to your WEMOS D1 Mini.
+ - Run power (red) to the 3.3v port.
+ - Run ground (black) to the G port. Do not yet solder this!
+ - Run SCL (I used green) to the D1 port.
+ - Run SDA (I used blue) to the D2 port.
+- Use about 40mm of stranded wire to wire the WEMOS to the Vindriktning.
+ - Near the top you will find 5 circular test points. Tin each with some solder.
+ - Run power (Blue?) to the 5V port.
+ - Run ground (Green?) to the G port. You can now solder this and the AHT10 ground.
+ - Run the pad 'rest' (yellow?) to the D3 port.
+- Gently flex the AHT10 so it is sort of floating over the WEMOS.
+- Program the WEMOS now.
+- Tuck the whole mess back into the Vindriktning case. The WEMOS will sit flat on the roof of the case, and the temp sensor will dangle down into the air stream from the dust sensor.
 
 ## Software
 
@@ -55,53 +45,16 @@ Furthermore, you will also need to install the following libraries using the Lib
 * ArduinoJSON 6.10.1
 * PubSubClient 2.8.0
 * WiFiManager 0.15.0
-
+* Adafruit AHT10 0.1.0
+* Adafruit BusIO 1.9.1
+* Adafruit Unified Sensor 1.1.4
 
 Just build, flash, and you're done.
 
 When connecting everything up, you should see an open Wi-Fi Access Point to configure your Wi-Fi and MQTT credentials.
 
-## Low-Noise Mod
-
-**Note:** The intent of this section is only to document that this is possible. I don't "recommend" doing this nor do I advise against it. 
-
-As you might've noticed, there's a fan in there, which is audible even multiple meters away.
-
-For some reason, the Ikea uC firmware decides to toggle the fan on and off every minute 
-or so causing the noise it makes to change and therefore it constantly stays noticeable.
-
-Good thing is that the Fan does spin up fine with just 3.3V, which means that we can run it constantly from the
-voltage regulator of the D1 Mini.
-
-At 3.3V its noise is barely noticeable from 50 cm away.
-
-![3.3v](./img/3.3v.jpg)
-
-Having the Fan not connected at all was also tried but proved to mess up all readings completely.
-
-
-This is of course a more invasive modification than just adding Wi-Fi data logging.
-Though, given that it is just a €10 device, I'm fine with that.
-
-To make soldering a bit easier, note that the whole outer metal part of the Micro USB connector of the D1 Mini is
-connected to GND.
-
-## Misc
-
-The VINDRIKTNING consists of a custom(?) Cubic PM1006-like Sensor + another uC that does all that LED stuff, which talk
-via UART. The uC simply regularly polls the sensor and displays the results.
-
-Therefore, to add Wi-Fi connectivity, we just need to also listen to the TX of the Sensor and decode those messages.
-The Ikea uC will do all that polling stuff for us.
-
-As reported in #16, the transitions from Green to Yellow and Yellow to Red in the Ikea firmware are at around 30 and 100μg/m³.
-
-## ToDo
-
-Reconfiguration of a provisioned device without having to OTAU a firmware that clears the settings would be nice.
-
-
 ## References and sources
 
-- [@haxfleisch](https://twitter.com/haxfleisch) for their teardown of the device.
-- [Gabriel Valky](https://github.com/gabonator) for the incredibly useful [LA104 custom firmware + tools](https://github.com/gabonator/LA104)
+- [Original Source](https://github.com/Hypfer/esp8266-vindriktning-particle-sensor)
+- [RevSpace](https://revspace.nl/VINDRIKTNING) - Details about the device
+- [Adam Hořčica](https://twitter.com/horcicaa/status/1415291684569632768) - More detail
