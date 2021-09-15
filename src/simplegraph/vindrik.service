@@ -1,0 +1,7 @@
+[Unit]
+Description=Vindriktning Simple Graph Logger
+
+[Service]
+Type=simple
+ExecStart=/opt/vindrik/mqttrrd.py
+Restart=on-failure
